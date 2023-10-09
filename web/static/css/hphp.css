@@ -28,6 +28,15 @@
 
 .house-image {
     max-width: 100px;
+    transition: transform 0.2s;
+}
+
+.house-image:hover {
+    transform: scale(1.1);
+}
+
+.score-button {
+    width: 50px;
 }
 
 h1 {

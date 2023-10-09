@@ -3,17 +3,18 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"net/http"
+	"strconv"
 )
 
 var (
 	redisDB *redis.Client
 	ctx     context.Context
 )
+
+var scoreResponseString = `<p id="%s-score" class="text-center">Score: %d</p>`
 
 func initRedis(addr string, password string) {
 	redisDB = redis.NewClient(&redis.Options{
@@ -34,37 +35,43 @@ func initRedis(addr string, password string) {
 
 func getScore(c *gin.Context) {
 	houseName := c.Param("houseName")
-	value, err := redisDB.Get(ctx, houseName).Result()
+	stringScore, err := redisDB.Get(ctx, houseName).Result()
 	if err != nil {
 		panic(err)
 	}
-	scoreString := fmt.Sprintf("<p class=\"text-center\">Score: %s</p>", value)
-	c.String(http.StatusOK, scoreString)
+	score, err := strconv.Atoi(stringScore)
+	if err != nil {
+		panic(err)
+	}
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, fmt.Sprintf(scoreResponseString, houseName, score))
 }
 
 func setScore(c *gin.Context) {
 	houseName := c.Param("houseName")
-	var newScore struct {
-		Score int `json:"score"`
-	}
-	if err := c.ShouldBindJSON(&newScore); err != nil {
-		log.Println("Could not parse JSON input")
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
-		return
-	}
-	err := redisDB.Set(ctx, houseName, newScore.Score, 0).Err()
+	newScore, err := strconv.Atoi(c.PostForm("newScore"))
 	if err != nil {
-		panic(err)
+		panic(err.Error())
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	if err = redisDB.Set(ctx, houseName, newScore, 0).Err(); err != nil {
+		panic(err.Error())
+	}
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, fmt.Sprintf(scoreResponseString, houseName, newScore))
 }
 
-func incrementScore(c *gin.Context) {
-
-}
-
-func decrementScore(c *gin.Context) {
-
+func patchScore(c *gin.Context) {
+	houseName := c.Param("houseName")
+	incrementBy, err := strconv.Atoi(c.PostForm("incrementBy"))
+	if err != nil {
+		panic(err.Error())
+	}
+	newValue, err := redisDB.IncrBy(ctx, houseName, int64(incrementBy)).Result()
+	if err != nil {
+		panic(err.Error())
+	}
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.String(http.StatusOK, fmt.Sprintf(scoreResponseString, houseName, newValue))
 }
 
 func main() {
@@ -73,6 +80,7 @@ func main() {
 
 	r.GET("/score/:houseName", getScore)
 	r.POST("/score/:houseName", setScore)
+	r.PATCH("/score/:houseName", patchScore)
 
 	// Serve static files from the "web" directory.
 	r.StaticFS("/static", http.Dir("web/static"))
