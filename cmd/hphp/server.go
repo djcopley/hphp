@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"github.com/djcopley/hphp/internal/db"
 	"github.com/djcopley/hphp/internal/routes"
 	"github.com/gin-gonic/gin"
@@ -9,7 +11,12 @@ import (
 )
 
 func main() {
-	db.InitRedis("localhost:6379", "")
+	redisIp := flag.String("redisIp", "127.0.0.1", "redis listen ip")
+	redisPort := flag.Int("redisPort", 6379, "redis listen port")
+	redisPassword := flag.String("redisPassword", "", "redis db password")
+
+	db.InitRedis(fmt.Sprintf("%s:%d", *redisIp, *redisPort), *redisPassword)
+
 	r := gin.Default()
 
 	r.GET("/house-events", routes.GetHouseEvents)
