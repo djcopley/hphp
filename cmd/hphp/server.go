@@ -1,86 +1,21 @@
 package main
 
 import (
-	"context"
-	"fmt"
+	"github.com/djcopley/hphp/internal/db"
+	"github.com/djcopley/hphp/internal/routes"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
+	"log"
 	"net/http"
-	"strconv"
 )
-
-var (
-	redisDB *redis.Client
-	ctx     context.Context
-)
-
-var scoreResponseString = `<p id="%s-score" class="text-center">Score: %d</p>`
-
-func initRedis(addr string, password string) {
-	redisDB = redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: password,
-		DB:       0,
-	})
-
-	ctx = context.Background()
-
-	pong, err := redisDB.Ping(ctx).Result()
-	if err != nil {
-		fmt.Println("Failed to connect to Redis:", err)
-		return
-	}
-	fmt.Println("Connected to Redis:", pong)
-}
-
-func getScore(c *gin.Context) {
-	houseName := c.Param("houseName")
-	stringScore, err := redisDB.Get(ctx, houseName).Result()
-	if err != nil {
-		panic(err)
-	}
-	score, err := strconv.Atoi(stringScore)
-	if err != nil {
-		panic(err)
-	}
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.String(http.StatusOK, fmt.Sprintf(scoreResponseString, houseName, score))
-}
-
-func setScore(c *gin.Context) {
-	houseName := c.Param("houseName")
-	newScore, err := strconv.Atoi(c.PostForm("newScore"))
-	if err != nil {
-		panic(err.Error())
-	}
-	if err = redisDB.Set(ctx, houseName, newScore, 0).Err(); err != nil {
-		panic(err.Error())
-	}
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.String(http.StatusOK, fmt.Sprintf(scoreResponseString, houseName, newScore))
-}
-
-func patchScore(c *gin.Context) {
-	houseName := c.Param("houseName")
-	incrementBy, err := strconv.Atoi(c.PostForm("incrementBy"))
-	if err != nil {
-		panic(err.Error())
-	}
-	newValue, err := redisDB.IncrBy(ctx, houseName, int64(incrementBy)).Result()
-	if err != nil {
-		panic(err.Error())
-	}
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.String(http.StatusOK, fmt.Sprintf(scoreResponseString, houseName, newValue))
-}
 
 func main() {
-	initRedis("localhost:6379", "")
+	db.InitRedis("localhost:6379", "")
 	r := gin.Default()
 
-	r.GET("/score/:houseName", getScore)
-	r.POST("/score/:houseName", setScore)
-	r.PATCH("/score/:houseName", patchScore)
+	r.GET("/house-events", routes.GetHouseEvents)
+	r.GET("/score/:houseName", routes.GetScore)
+	r.POST("/score/:houseName", routes.SetScore)
+	r.PATCH("/score/:houseName", routes.PatchScore)
 
 	// Serve static files from the "web" directory.
 	r.StaticFS("/static", http.Dir("web/static"))
@@ -89,8 +24,7 @@ func main() {
 		c.File("web/index.html")
 	})
 
-	err := r.Run(":8080")
-	if err != nil {
-		panic(err)
+	if err := r.Run(":8080"); err != nil {
+		log.Panicf("Failed to start gin server: %v", err)
 	}
 }

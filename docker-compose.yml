@@ -1,0 +1,14 @@
+version: '3'
+services:
+  web:
+    build:
+      context: ./path/to/your/service  # Replace with the path to your service's Dockerfile
+    ports:
+      - "8080:8080"  # Adjust the port mapping as needed
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"  # Map Redis port to host
